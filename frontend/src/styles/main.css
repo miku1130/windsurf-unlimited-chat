@@ -1,0 +1,134 @@
+/* 全局样式 - 复刻寸止风格 */
+
+/* Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #303133;
+  background: #f0f2f5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html.dark body {
+  color: #e0e0e0;
+  background: #141414;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+/* 全局选择颜色 */
+::selection {
+  background: #52c41a33;
+  color: inherit;
+}
+
+/* 自定义滚动条 - WebKit */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #c0c4cc;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #909399;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #555;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+/* 链接 */
+a {
+  color: #52c41a;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* 代码块高亮 - 亮色主题覆盖 */
+pre code.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  border-radius: 6px;
+}
+code.hljs {
+  padding: 2px 4px;
+}
+
+/* 过渡动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.3s ease;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translateY(10px);
+  opacity: 0;
+}
+
+/* Naive UI 全局覆盖 */
+.n-button {
+  font-size: 12px !important;
+}
+.n-input .n-input__textarea-el {
+  font-size: 13px !important;
+}
+.n-checkbox .n-checkbox__label {
+  font-size: 13px !important;
+}
+
+/* 输入框聚焦色 - 绿色主题 */
+.n-input--focus .n-input__state-border {
+  border-color: #52c41a !important;
+  box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.2) !important;
+}
+
+/* 按钮主色 */
+.n-button--primary-type {
+  --n-color: #52c41a !important;
+  --n-color-hover: #73d13d !important;
+  --n-color-pressed: #389e0d !important;
+  --n-border: 1px solid #52c41a !important;
+  --n-border-hover: 1px solid #73d13d !important;
+  --n-border-pressed: 1px solid #389e0d !important;
+}
+
+/* tooltip */
+.n-tooltip {
+  font-size: 12px !important;
+}

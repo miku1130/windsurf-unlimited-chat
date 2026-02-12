@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.spec
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# PyInstaller extracted
+AIFeedbackTool.exe_extracted/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Binary analysis
+*.i64
+*.idb
+strings_extracted.txt
+
+# Executables
+*.exe
+
+# Tasks
+.tasks/
