@@ -1,6 +1,6 @@
 # windsurf无限对话
 
-**AI Interactive Feedback Tool** — 一款让 Windsurf AI 编程助手能够主动向用户提问、获取反馈的交互工具。
+**柠檬酱windsurf无限对话工具** — 一款让 Windsurf AI 编程助手能够主动向用户提问、获取反馈的交互工具。
 
 通过 MCP（Model Context Protocol）机制，在 AI 需要确认或澄清时弹出交互窗口，实现真正的人机双向对话，打破 AI 单向输出的限制。
 
