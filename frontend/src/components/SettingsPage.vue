@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
+import { useMessage } from 'naive-ui'
 
 interface SoundPreset {
   id: string
@@ -152,6 +153,17 @@ async function configureWindsurf() {
 onMounted(() => {
   loadSettings()
 })
+
+const msg = useMessage()
+
+// 复制文本到剪贴板
+function copyText(text: string) {
+  navigator.clipboard.writeText(text).then(() => {
+    msg.success('已复制: ' + text)
+  }).catch(() => {
+    msg.error('复制失败')
+  })
+}
 </script>
 
 <template>
@@ -296,6 +308,37 @@ onMounted(() => {
           </div>
           <div v-else-if="configResult && configResult !== 'success'" class="config-result error">
             {{ configResult }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 关于信息 -->
+      <div class="settings-section about-section">
+        <div class="section-header">
+          <div class="section-icon about">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+              <line x1="12" y1="16" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <line x1="12" y1="8" x2="12.01" y2="8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="section-info">
+            <h2>关于</h2>
+            <p>软件信息与联系方式</p>
+          </div>
+        </div>
+        <div class="about-content">
+          <div class="about-item">
+            <span class="about-label">作者</span>
+            <span class="about-value">柠檬酱</span>
+          </div>
+          <div class="about-item">
+            <span class="about-label">QQ交流群</span>
+            <span class="about-value copyable" @click="copyText('1076144676')">1076144676</span>
+          </div>
+          <div class="about-item">
+            <span class="about-label">软件定制</span>
+            <span class="about-value">如需软件定制可联系QQ私聊</span>
           </div>
         </div>
       </div>
@@ -613,5 +656,59 @@ onMounted(() => {
 .dark .config-result.error {
   background: #2e1a1a;
   border-color: #5a3a3a;
+}
+
+/* 关于板块 */
+.section-icon.about {
+  background: #f0f5ff;
+  color: #597ef7;
+}
+
+.dark .section-icon.about {
+  background: #1a2240;
+}
+
+.about-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.about-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.about-item:last-child {
+  border-bottom: none;
+}
+
+.dark .about-item {
+  border-bottom-color: #333;
+}
+
+.about-label {
+  font-size: 12px;
+  opacity: 0.5;
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.about-value {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.about-value.copyable {
+  color: #52c41a;
+  cursor: pointer;
+  user-select: all;
+}
+
+.about-value.copyable:hover {
+  text-decoration: underline;
 }
 </style>
