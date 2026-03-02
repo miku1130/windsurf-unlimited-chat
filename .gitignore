@@ -35,3 +35,6 @@ strings_extracted.txt
 
 # Tasks
 .tasks/
+
+# Server deployment files (contains sensitive info)
+server_files/
