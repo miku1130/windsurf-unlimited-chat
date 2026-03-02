@@ -5,7 +5,6 @@ import type { McpRequest, McpResponse } from '../types/popup'
 import { useMessage } from 'naive-ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
-import AnnouncementBanner from './AnnouncementBanner.vue'
 import PopupActions from './PopupActions.vue'
 import PopupContent from './PopupContent.vue'
 import PopupHeader from './PopupHeader.vue'
@@ -266,9 +265,6 @@ onUnmounted(() => {
 
     <!-- 内容区域 - 可滚动 -->
     <div class="popup-scroll-area">
-      <!-- 公告横幅 -->
-      <AnnouncementBanner :current-theme="currentTheme" />
-
       <!-- AI消息卡片 -->
       <div class="content-card">
         <PopupContent

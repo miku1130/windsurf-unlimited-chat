@@ -4,6 +4,7 @@ import type { McpRequest, McpResponse, QueueMessage } from './types/popup'
 import { darkTheme } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 
+import AnnouncementBanner from './components/AnnouncementBanner.vue'
 import McpPopup from './components/McpPopup.vue'
 import QueueFlashPopup from './components/QueueFlashPopup.vue'
 import QueueManager from './components/QueueManager.vue'
@@ -115,6 +116,8 @@ onMounted(() => {
               @theme-change="handleThemeChange"
             >
               <template #header-extra>
+                <!-- 公告铃铛按钮 -->
+                <AnnouncementBanner :current-theme="currentTheme" />
                 <button
                   class="settings-gear-btn"
                   :class="{ dark: currentTheme === 'dark' }"

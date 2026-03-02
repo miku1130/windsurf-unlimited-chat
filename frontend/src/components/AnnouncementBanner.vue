@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * AnnouncementBanner - 公告横幅组件
- * 从远程服务器获取公告内容并展示在首页顶部
+ * AnnouncementBell - 公告铃铛按钮组件
+ * 在header区域显示铃铛图标，点击弹出公告内容
+ * 有新公告时显示小红点提示
  */
 import { onMounted, ref } from 'vue'
 
@@ -18,39 +19,44 @@ withDefaults(defineProps<Props>(), {
 
 // 公告数据
 const announcement = ref<string>('')
-const visible = ref(false)
+const hasAnnouncement = ref(false)
+const showPopup = ref(false)
 const dismissed = ref(false)
-const loading = ref(true)
 
 // 获取公告内容
 async function fetchAnnouncement() {
-  loading.value = true
   try {
     const res = await fetch(ANNOUNCEMENT_URL, {
       cache: 'no-cache',
     })
     if (res.ok) {
       const data = await res.json()
-      // 支持 { content: "公告内容", enabled: true }
       if (data && data.enabled && data.content && data.content.trim()) {
         announcement.value = data.content
-        visible.value = true
+        hasAnnouncement.value = true
       } else {
-        visible.value = false
+        hasAnnouncement.value = false
       }
     }
   } catch (e) {
-    // 获取失败时静默处理，不显示公告
     console.debug('获取公告失败:', e)
-    visible.value = false
-  } finally {
-    loading.value = false
+    hasAnnouncement.value = false
   }
 }
 
-// 关闭公告
-function dismiss() {
-  dismissed.value = true
+// 切换弹窗显示
+function togglePopup() {
+  if (!hasAnnouncement.value) return
+  showPopup.value = !showPopup.value
+  // 点击后标记已读，移除红点
+  if (showPopup.value) {
+    dismissed.value = true
+  }
+}
+
+// 关闭弹窗
+function closePopup() {
+  showPopup.value = false
 }
 
 onMounted(() => {
@@ -59,83 +65,208 @@ onMounted(() => {
 </script>
 
 <template>
-  <div
-    v-if="visible && !dismissed"
-    class="announcement-banner"
-    :class="{ dark: currentTheme === 'dark' }"
-  >
-    <div class="announcement-icon">
-      <!-- 喇叭图标 -->
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+  <div class="announcement-bell-wrap" v-if="hasAnnouncement">
+    <!-- 铃铛按钮 -->
+    <button
+      class="bell-btn"
+      :class="{ dark: currentTheme === 'dark' }"
+      @click.stop="togglePopup"
+      title="查看公告"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-    </div>
-    <div class="announcement-text">{{ announcement }}</div>
-    <button class="announcement-close" @click="dismiss" title="关闭公告">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-        <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
+      <!-- 未读小红点 -->
+      <span v-if="!dismissed" class="bell-dot"></span>
     </button>
+
+    <!-- 公告弹窗 -->
+    <Teleport to="body">
+      <div v-if="showPopup" class="announcement-overlay" @click="closePopup">
+        <div
+          class="announcement-popup"
+          :class="{ dark: currentTheme === 'dark' }"
+          @click.stop
+        >
+          <div class="popup-header">
+            <div class="popup-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="color: #faad14;">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>公告</span>
+            </div>
+            <button class="popup-close" @click="closePopup">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <div class="popup-body">
+            {{ announcement }}
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <style scoped>
-.announcement-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  margin: 8px 8px 0 8px;
-  background: #fffbe6;
-  border: 1px solid #ffe58f;
+.announcement-bell-wrap {
+  position: relative;
+}
+
+/* 铃铛按钮 - 与header其他按钮风格一致 */
+.bell-btn {
+  width: 28px;
+  height: 28px;
   border-radius: 6px;
-  font-size: 12px;
-  color: #8c6e00;
-  line-height: 1.5;
-}
-
-.announcement-banner.dark {
-  background: #2b2611;
-  border-color: #594e1a;
-  color: #d4b106;
-}
-
-.announcement-icon {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  color: #faad14;
-}
-
-.announcement-text {
-  flex: 1;
-  word-break: break-word;
-}
-
-.announcement-close {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  border: none;
-  background: none;
-  color: inherit;
-  opacity: 0.5;
+  border: 1px solid #e0e0e0;
+  background: transparent;
+  color: #666;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
+  transition: all 0.2s ease;
+  padding: 0;
+  margin-right: 4px;
+  position: relative;
+}
+
+.bell-btn:hover {
+  background: #f0f0f0;
+  color: #faad14;
+  border-color: #faad14;
+}
+
+.bell-btn.dark {
+  border-color: #444;
+  color: #aaa;
+}
+
+.bell-btn.dark:hover {
+  background: #444;
+  color: #faad14;
+  border-color: #faad14;
+}
+
+/* 未读小红点 */
+.bell-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff4d4f;
+  border: 1.5px solid #fff;
+}
+
+.dark .bell-dot {
+  border-color: #242424;
+}
+
+/* 遮罩层 */
+.announcement-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 60px;
+}
+
+/* 弹窗卡片 */
+.announcement-popup {
+  width: 320px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  animation: popIn 0.2s ease;
+}
+
+.announcement-popup.dark {
+  background: #2a2a2a;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dark .popup-header {
+  border-bottom-color: #3a3a3a;
+}
+
+.popup-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.dark .popup-title {
+  color: #e0e0e0;
+}
+
+.popup-close {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: none;
+  color: #999;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
   padding: 0;
 }
 
-.announcement-close:hover {
-  opacity: 1;
-  background: rgba(0, 0, 0, 0.06);
+.popup-close:hover {
+  background: #f5f5f5;
+  color: #666;
 }
 
-.dark .announcement-close:hover {
-  background: rgba(255, 255, 255, 0.1);
+.dark .popup-close:hover {
+  background: #3a3a3a;
+  color: #ccc;
+}
+
+.popup-body {
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #555;
+  word-break: break-word;
+}
+
+.dark .popup-body {
+  color: #bbb;
 }
 </style>
