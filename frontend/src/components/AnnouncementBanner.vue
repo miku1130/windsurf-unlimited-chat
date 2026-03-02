@@ -7,7 +7,7 @@
 import { onMounted, ref } from 'vue'
 
 // 公告远程地址（使用HTTP 277端口，避免HTTPS自签名证书问题）
-const ANNOUNCEMENT_URL = 'http://8.134.87.73:277/announcement_api.php'
+const ANNOUNCEMENT_URL = ''
 
 interface Props {
   currentTheme?: string
