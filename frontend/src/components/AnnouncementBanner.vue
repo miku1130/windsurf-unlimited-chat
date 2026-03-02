@@ -6,8 +6,8 @@
  */
 import { onMounted, ref } from 'vue'
 
-// 公告远程地址（使用PHP API，自带CORS头）
-const ANNOUNCEMENT_URL = 'https://8.134.87.73/announcement_api.php'
+// 公告远程地址（使用HTTP 277端口，避免HTTPS自签名证书问题）
+const ANNOUNCEMENT_URL = 'http://8.134.87.73:277/announcement_api.php'
 
 interface Props {
   currentTheme?: string
@@ -65,7 +65,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="announcement-bell-wrap" v-if="hasAnnouncement">
+  <div class="announcement-bell-wrap">
     <!-- 铃铛按钮 -->
     <button
       class="bell-btn"
@@ -77,8 +77,8 @@ onMounted(() => {
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <!-- 未读小红点 -->
-      <span v-if="!dismissed" class="bell-dot"></span>
+      <!-- 未读小红点（仅有公告且未读时显示） -->
+      <span v-if="hasAnnouncement && !dismissed" class="bell-dot"></span>
     </button>
 
     <!-- 公告弹窗 -->
