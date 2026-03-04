@@ -54,10 +54,10 @@ jobs:
           cd dist
           # 如果有 .app 目录就打包它，否则打包可执行文件
           if [ -d "柠檬酱windsurf无限对话.app" ]; then
-            zip -r "柠檬酱windsurf无限对话_macOS.zip" "柠檬酱windsurf无限对话.app"
+            zip -r "windsurf-unlimited-chat_macOS.zip" "柠檬酱windsurf无限对话.app"
           else
             chmod +x "柠檬酱windsurf无限对话"
-            zip "柠檬酱windsurf无限对话_macOS.zip" "柠檬酱windsurf无限对话"
+            zip "windsurf-unlimited-chat_macOS.zip" "柠檬酱windsurf无限对话"
           fi
 
       # ── 上传到 Release ──
@@ -66,6 +66,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ github.event.inputs.release_tag }}" \
-            "dist/柠檬酱windsurf无限对话_macOS.zip" \
+            "dist/windsurf-unlimited-chat_macOS.zip" \
             --repo "${{ github.repository }}" \
             --clobber
