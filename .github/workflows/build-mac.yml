@@ -1,0 +1,68 @@
+# macOS 版本构建 & 上传到 Release
+# 手动触发，指定要上传到的 release tag
+name: Build macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '上传到哪个 Release Tag (如 v1.2.0)'
+        required: true
+        default: 'v1.2.0'
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Node.js 前端编译 ──
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      # ── Python 后端打包 ──
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          pip install pyinstaller pywebview Pillow
+
+      - name: Build macOS executable
+        run: |
+          pyinstaller "柠檬酱windsurf无限对话_mac.spec" --noconfirm
+
+      # ── 压缩产物 ──
+      - name: Package macOS build
+        run: |
+          cd dist
+          # 如果有 .app 目录就打包它，否则打包可执行文件
+          if [ -d "柠檬酱windsurf无限对话.app" ]; then
+            zip -r "柠檬酱windsurf无限对话_macOS.zip" "柠檬酱windsurf无限对话.app"
+          else
+            chmod +x "柠檬酱windsurf无限对话"
+            zip "柠檬酱windsurf无限对话_macOS.zip" "柠檬酱windsurf无限对话"
+          fi
+
+      # ── 上传到 Release ──
+      - name: Upload to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.inputs.release_tag }}" \
+            "dist/柠檬酱windsurf无限对话_macOS.zip" \
+            --repo "${{ github.repository }}" \
+            --clobber
