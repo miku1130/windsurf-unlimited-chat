@@ -37,6 +37,10 @@ const windsurfConfigured = ref(false)
 const configuring = ref(false)
 const configResult = ref('')
 
+// Windsurf 停用状态
+const disabling = ref(false)
+const disableResult = ref('')
+
 // 预设音效列表
 const presetSounds = ref<SoundPreset[]>([
   { id: '100w', name: '100万', filename: '100w.mp3' },
@@ -147,6 +151,27 @@ async function configureWindsurf() {
     configResult.value = '网络错误'
   } finally {
     configuring.value = false
+  }
+}
+
+// 一键停用 Windsurf 规则
+async function disableWindsurf() {
+  disabling.value = true
+  disableResult.value = ''
+  try {
+    const res = await fetch('/api/disable-windsurf', { method: 'POST' })
+    const data = await res.json()
+    if (data.success) {
+      windsurfConfigured.value = false
+      disableResult.value = 'success'
+      configResult.value = '' // 清除配置结果提示
+    } else {
+      disableResult.value = data.message || '停用失败'
+    }
+  } catch (e) {
+    disableResult.value = '网络错误'
+  } finally {
+    disabling.value = false
   }
 }
 
@@ -295,19 +320,38 @@ function copyText(text: string) {
           <p class="windsurf-desc">
             自动向 Windsurf 的 global_rules.md 注入提示词规则，使AI在结束会话前必须调用本工具征求你的反馈。
           </p>
-          <n-button
-            type="primary"
-            size="small"
-            :loading="configuring"
-            @click="configureWindsurf"
-          >
-            {{ windsurfConfigured ? '重新配置' : '立即配置' }}
-          </n-button>
+          <div class="windsurf-actions">
+            <n-button
+              type="primary"
+              size="small"
+              :loading="configuring"
+              @click="configureWindsurf"
+            >
+              {{ windsurfConfigured ? '重新配置' : '立即配置' }}
+            </n-button>
+            <n-button
+              v-if="windsurfConfigured"
+              type="error"
+              size="small"
+              :loading="disabling"
+              @click="disableWindsurf"
+            >
+              一键停用
+            </n-button>
+          </div>
+          <!-- 配置结果提示 -->
           <div v-if="configResult === 'success'" class="config-result success">
             配置成功！规则已写入 Windsurf 配置文件。
           </div>
           <div v-else-if="configResult && configResult !== 'success'" class="config-result error">
             {{ configResult }}
+          </div>
+          <!-- 停用结果提示 -->
+          <div v-if="disableResult === 'success'" class="config-result success">
+            已停用！已从 Windsurf 配置文件中移除注入的规则。
+          </div>
+          <div v-else-if="disableResult && disableResult !== 'success'" class="config-result error">
+            {{ disableResult }}
           </div>
         </div>
       </div>
@@ -627,6 +671,12 @@ function copyText(text: string) {
   opacity: 0.6;
   line-height: 1.5;
   margin: 0;
+}
+
+.windsurf-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .config-result {

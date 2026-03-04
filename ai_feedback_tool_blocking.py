@@ -34,6 +34,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 import webbrowser
 from pathlib import Path
 from typing import Optional, List
@@ -338,7 +339,11 @@ class AIFeedbackTool:
                         ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_cmd],
                         creationflags=0x08000000  # CREATE_NO_WINDOW
                     )
+            elif platform.system() == "Darwin":
+                # macOS: 使用系统自带的 afplay 播放音效
+                os.system(f'afplay "{sound_file}" &')
             else:
+                # Linux: 使用 ffplay 播放音效
                 os.system(f'ffplay -nodisp -autoexit "{sound_file}" &>/dev/null &')
         except Exception as e:
             print(f"[音效] 播放异常: {e}", file=sys.stderr)
@@ -558,6 +563,85 @@ class AIFeedbackTool:
 """
 
     # ═══════════════════════════════════════════════════
+    # 一键停用 - 清除 Windsurf 注入的规则
+    # ═══════════════════════════════════════════════════
+
+    def disable_windsurf(self) -> dict:
+        """
+        一键停用 - 从 global_rules.md 中移除所有注入的规则
+        
+        只删除本工具注入的内容，保留用户自己的配置。
+        """
+        windsurf_path = self._find_windsurf_path()
+        if not windsurf_path:
+            return {"success": False, "message": "未找到 Windsurf 配置路径"}
+        
+        if not os.path.exists(windsurf_path):
+            return {"success": False, "message": "配置文件不存在"}
+        
+        try:
+            with open(windsurf_path, "r", encoding="utf-8") as f:
+                existing_content = f.read()
+            
+            if not existing_content.strip():
+                return {"success": True, "message": "配置文件已为空，无需清理"}
+            
+            # 创建备份
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_dir = os.path.join(os.path.dirname(windsurf_path), ".backup_")
+            os.makedirs(backup_dir, exist_ok=True)
+            backup_path = os.path.join(backup_dir, f"global_rules_{timestamp}_before_disable.md")
+            shutil.copy2(windsurf_path, backup_path)
+            
+            # 移除注入的规则块 (匹配 "# AI Interactive Feedback" 到下一个一级标题或文件末尾)
+            cleaned = re.sub(
+                r'# AI Interactive Feedback[\s\S]*?(?=\n#\s[^#]|\Z)', 
+                '', 
+                existing_content
+            )
+            
+            # 移除顶部强制规则块 (以 "⚠️ 以下规则具有最高优先级" 开头)
+            cleaned = re.sub(
+                r'⚠️ 以下规则具有最高优先级[\s\S]*?(?=\n#\s[^#]|\n[^⚠\s\-#\*\d]|\Z)',
+                '',
+                cleaned
+            )
+            
+            # 移除开头的 "⚠️ 重要" 和 "⚠️ 再次强调" 块
+            cleaned = re.sub(r'⚠️ 重要[\s\S]*?(?=\n\n|\Z)', '', cleaned)
+            cleaned = re.sub(r'⚠️ 再次强调[\s\S]*?(?=\n\n|\Z)', '', cleaned)
+            
+            # 移除 "## ⛔ 绝对禁止" 和 "## 🔴 核心强制规则" 块
+            cleaned = re.sub(r'##\s*⛔[^\n]*\n[\s\S]*?(?=\n##\s|\n#\s[^#]|\Z)', '', cleaned)
+            cleaned = re.sub(r'##\s*🔴[^\n]*\n[\s\S]*?(?=\n##\s|\n#\s[^#]|\Z)', '', cleaned)
+            
+            # 移除工具调用方式和调用时机检查清单
+            cleaned = re.sub(r'##\s*工具调用方式[\s\S]*?(?=\n##\s|\n#\s[^#]|\Z)', '', cleaned)
+            cleaned = re.sub(r'##\s*调用时机检查清单[\s\S]*?(?=\n##\s|\n#\s[^#]|\Z)', '', cleaned)
+            cleaned = re.sub(r'##\s*重要提醒[\s\S]*?(?=\n##\s|\n#\s[^#]|\Z)', '', cleaned)
+            
+            # 清理多余空行（超过2个连续空行变为2个）
+            cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
+            
+            # 写入清理后的内容
+            with open(windsurf_path, "w", encoding="utf-8") as f:
+                f.write(cleaned + "\n" if cleaned else "")
+            
+            # 更新设置状态
+            self._save_settings({"windsurf_configured": False})
+            
+            return {
+                "success": True,
+                "message": "已成功移除所有注入的规则",
+                "windsurf_path": windsurf_path,
+                "backup_path": backup_path,
+                "remaining_content_length": len(cleaned),
+            }
+            
+        except Exception as e:
+            return {"success": False, "message": f"停用失败: {str(e)}"}
+
+    # ═══════════════════════════════════════════════════
     # 对话记录管理
     # ═══════════════════════════════════════════════════
 
@@ -770,6 +854,9 @@ class AIFeedbackTool:
                 if platform.system() == "Windows":
                     import winsound
                     winsound.MessageBeep(winsound.MB_OK)
+                elif platform.system() == "Darwin":
+                    # macOS: 播放系统默认提示音
+                    os.system('afplay /System/Library/Sounds/Ping.aiff &')
                 else:
                     os.system("printf '\\a'")
             except Exception:
@@ -891,9 +978,11 @@ class AIFeedbackTool:
         if predefined_options is None:
             predefined_options = []
 
-        # 请求配置 (发送给前端)
+        # 请求配置 (发送给前端) - 每个窗口实例使用唯一 session_id
+        session_id = f"session_{uuid.uuid4().hex[:16]}"
         config = {
-            "request_id": f"req_{int(time.time())}",
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+            "session_id": session_id,
             "summary": summary,
             "message": summary,
             "predefined_options": predefined_options,
@@ -1029,6 +1118,11 @@ class AIFeedbackTool:
                         tool_instance._save_settings({"windsurf_configured": True})
                     self._json_response(result_data)
 
+                elif self.path == "/api/disable-windsurf":
+                    # 一键停用 - 移除注入的规则
+                    result_data = tool_instance.disable_windsurf()
+                    self._json_response(result_data)
+
                 elif self.path == "/api/queue":
                     # 添加消息到队列
                     try:
@@ -1105,20 +1199,13 @@ class AIFeedbackTool:
             def log_message(self, format, *args):
                 pass  # 静默日志，避免污染 stdout
 
-        # ── 启动服务器 ──
-        port = 8765
-        max_retries = 10
-        server = None
-
-        for attempt in range(max_retries):
-            try:
-                server = http.server.HTTPServer(("127.0.0.1", port), FeedbackHandler)
-                break
-            except OSError:
-                port += 1
-                if attempt == max_retries - 1:
-                    print(f"[错误] 无法找到可用端口 (8765-{port})", file=sys.stderr)
-                    return self._cli_feedback_blocking(project_dir, summary, timeout)
+        # ── 启动服务器 (port=0 让操作系统自动分配可用端口，避免多窗口冲突) ──
+        try:
+            server = http.server.HTTPServer(("127.0.0.1", 0), FeedbackHandler)
+            port = server.server_address[1]  # 获取实际分配的端口
+        except OSError as e:
+            print(f"[错误] 无法启动HTTP服务器: {e}", file=sys.stderr)
+            return self._cli_feedback_blocking(project_dir, summary, timeout)
 
         # 守护线程运行服务器
         server_thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -1152,7 +1239,7 @@ class AIFeedbackTool:
                 icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico")
 
             window = webview.create_window(
-                "柠檬酱帮你阻止了会话结束",
+                f"柠檬酱帮你阻止了会话结束 [{session_id[-8:]}]",
                 url=url,
                 width=780,
                 height=850,
@@ -1178,8 +1265,11 @@ class AIFeedbackTool:
             sys.stdout.flush()
 
             # webview.start 会阻塞直到窗口关闭
-            # 强制使用 EdgeChromium (WebView2) 后端，MSHTML(IE) 无法渲染 Vue3
-            webview.start(gui='edgechromium')
+            # Windows 强制使用 EdgeChromium, macOS/Linux 使用默认后端
+            if platform.system() == "Windows":
+                webview.start(gui='edgechromium')
+            else:
+                webview.start()
 
         except ImportError:
             # pywebview 不可用时回退到浏览器
@@ -1236,7 +1326,8 @@ class AIFeedbackTool:
 
         # 请求配置 (队列消费模式)
         config = {
-            "request_id": f"req_{int(time.time())}",
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+            "session_id": f"session_{uuid.uuid4().hex[:16]}",
             "summary": summary,
             "message": summary,
             "predefined_options": predefined_options or [],
@@ -1357,34 +1448,27 @@ class AIFeedbackTool:
             def log_message(self, format, *args):
                 pass
 
-        # 启动服务器
-        port = 8765
-        max_retries = 10
-        server = None
-
-        for attempt in range(max_retries):
-            try:
-                server = http.server.HTTPServer(("127.0.0.1", port), QueueConsumeHandler)
-                break
-            except OSError:
-                port += 1
-                if attempt == max_retries - 1:
-                    # 回退：直接自动提交，不弹窗
-                    consumed = queue_mgr.consume_first()
-                    if consumed:
-                        feedback = {
-                            "user_input": consumed["content"],
-                            "selected_options": [],
-                            "images": consumed.get("images", []),
-                            "metadata": {
-                                "timestamp": datetime.datetime.now().isoformat(),
-                                "source": "queue_auto",
-                            },
-                        }
-                        result["feedback"] = [feedback]
-                        result["text_count"] = 1
-                        print(json.dumps(feedback, ensure_ascii=False, indent=2))
-                    return result
+        # 启动服务器 (port=0 自动分配端口)
+        try:
+            server = http.server.HTTPServer(("127.0.0.1", 0), QueueConsumeHandler)
+            port = server.server_address[1]
+        except OSError:
+            # 回退：直接自动提交，不弹窗
+            consumed = queue_mgr.consume_first()
+            if consumed:
+                feedback = {
+                    "user_input": consumed["content"],
+                    "selected_options": [],
+                    "images": consumed.get("images", []),
+                    "metadata": {
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "source": "queue_auto",
+                    },
+                }
+                result["feedback"] = [feedback]
+                result["text_count"] = 1
+                print(json.dumps(feedback, ensure_ascii=False, indent=2))
+            return result
 
         server_thread = threading.Thread(target=server.serve_forever, daemon=True)
         server_thread.start()
@@ -1408,7 +1492,7 @@ class AIFeedbackTool:
                 icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico")
 
             window = webview.create_window(
-                f"队列自动发送 ({queue_count}条待发送)",
+                f"队列自动发送 ({queue_count}条待发送) [{config['session_id'][-8:]}]",
                 url=url,
                 width=600,
                 height=400,
@@ -1470,7 +1554,11 @@ class AIFeedbackTool:
             print("[队列] 快闪弹窗已弹出，等待自动发送或用户取消...")
             sys.stdout.flush()
 
-            webview.start(gui='edgechromium')
+            # Windows 强制使用 EdgeChromium, macOS/Linux 使用默认后端
+            if platform.system() == "Windows":
+                webview.start(gui='edgechromium')
+            else:
+                webview.start()
 
         except ImportError:
             # pywebview 不可用时，直接自动提交
@@ -1538,7 +1626,8 @@ class AIFeedbackTool:
         queue_mgr = QueueManager()
 
         config = {
-            "request_id": f"req_{int(time.time())}",
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+            "session_id": f"session_{uuid.uuid4().hex[:16]}",
             "summary": summary,
             "message": summary,
             "predefined_options": predefined_options,
@@ -1670,6 +1759,10 @@ class AIFeedbackTool:
                     if result_data.get("success"):
                         tool_instance._save_settings({"windsurf_configured": True})
                     self._json_response(result_data)
+                elif self.path == "/api/disable-windsurf":
+                    # 一键停用 - 移除注入的规则
+                    result_data = tool_instance.disable_windsurf()
+                    self._json_response(result_data)
                 else:
                     self._json_response({"error": "Not Found"}, 404)
 
@@ -1693,18 +1786,12 @@ class AIFeedbackTool:
             def log_message(self, format, *args):
                 pass
 
-        port = 8765
-        max_retries = 10
-        server = None
-
-        for attempt in range(max_retries):
-            try:
-                server = http.server.HTTPServer(("127.0.0.1", port), NormalFeedbackHandler)
-                break
-            except OSError:
-                port += 1
-                if attempt == max_retries - 1:
-                    return self._cli_feedback_blocking(project_dir, summary, timeout)
+        # 启动服务器 (port=0 自动分配端口，避免多窗口冲突)
+        try:
+            server = http.server.HTTPServer(("127.0.0.1", 0), NormalFeedbackHandler)
+            port = server.server_address[1]
+        except OSError:
+            return self._cli_feedback_blocking(project_dir, summary, timeout)
 
         server_thread = threading.Thread(target=server.serve_forever, daemon=True)
         server_thread.start()
@@ -1723,7 +1810,7 @@ class AIFeedbackTool:
                     response_event.set()
 
             window = webview.create_window(
-                "柠檬酱帮你阻止了会话结束",
+                f"柠檬酱帮你阻止了会话结束 [{config['session_id'][-8:]}]",
                 url=url,
                 width=780,
                 height=850,
@@ -1747,7 +1834,11 @@ class AIFeedbackTool:
             print("🚫 会话处于阻塞状态，直到用户提交反馈或关闭窗口")
             sys.stdout.flush()
 
-            webview.start(gui='edgechromium')
+            # Windows 强制使用 EdgeChromium, macOS/Linux 使用默认后端
+            if platform.system() == "Windows":
+                webview.start(gui='edgechromium')
+            else:
+                webview.start()
 
         except ImportError:
             webbrowser.open(url)
@@ -1833,7 +1924,8 @@ def run_queue_manager_service():
         def do_GET(self):
             if self.path == "/api/config":
                 self._json_response({
-                    "request_id": f"req_{int(time.time())}",
+                    "request_id": f"req_{uuid.uuid4().hex[:12]}",
+                    "session_id": f"session_{uuid.uuid4().hex[:16]}",
                     "summary": "队列管理器",
                     "message": "队列管理器",
                     "predefined_options": [],
@@ -2069,6 +2161,8 @@ def main():
   python ai_feedback_tool_blocking.py --system-info
   # 自动配置 Windsurf
   python ai_feedback_tool_blocking.py --configure
+  # 一键停用 (移除 Windsurf 中的注入规则)
+  python ai_feedback_tool_blocking.py --disable
   # 启动队列管理器 (后台常驻服务 + 系统托盘)
   python ai_feedback_tool_blocking.py --queue-manager
         """,
@@ -2083,6 +2177,8 @@ def main():
                            help="显示系统信息")
     mode_group.add_argument("--configure", action="store_true",
                            help="自动配置 Windsurf (注入规则)")
+    mode_group.add_argument("--disable", action="store_true",
+                           help="一键停用 - 移除 Windsurf 中注入的所有规则")
     mode_group.add_argument("--queue-manager", action="store_true",
                            help="启动队列管理器 (后台常驻服务 + 系统托盘)")
 
@@ -2107,6 +2203,12 @@ def main():
 
     if args.configure:
         result = tool.configure_windsurf()
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return
+
+    if args.disable:
+        # 一键停用 - 移除 Windsurf 中注入的规则
+        result = tool.disable_windsurf()
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return
 

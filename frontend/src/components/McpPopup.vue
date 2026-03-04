@@ -13,6 +13,7 @@ import PopupInput from './PopupInput.vue'
 interface Props {
   request: McpRequest | null
   currentTheme?: string
+  sessionId?: string  // 窗口唯一会话ID
 }
 
 interface Emits {
@@ -23,6 +24,7 @@ interface Emits {
 
 const props = withDefaults(defineProps<Props>(), {
   currentTheme: 'light',
+  sessionId: '',
 })
 
 const emit = defineEmits<Emits>()
@@ -255,6 +257,7 @@ onUnmounted(() => {
     <div class="popup-header-wrap">
       <PopupHeader
         :current-theme="currentTheme"
+        :title="sessionId ? `柠檬酱帮你阻止了会话结束 [${sessionId.slice(-8)}]` : '柠檬酱帮你阻止了会话结束'"
         @theme-change="handleThemeChange"
       >
         <template #extra>

@@ -19,6 +19,7 @@ const appMode = ref<string>('feedback')  // feedback | queue_consume | queue_man
 const queueMessage = ref<QueueMessage | null>(null)
 const queueCount = ref(0)
 const autoConsumeDelay = ref(3)
+const sessionId = ref<string>('')  // 每个窗口的唯一会话ID
 
 // Naive UI 主题
 const naiveTheme = computed(() => currentTheme.value === 'dark' ? darkTheme : null)
@@ -35,6 +36,8 @@ async function fetchConfig() {
         predefined_options: config.predefined_options || [],
         is_markdown: config.is_markdown ?? true,
       }
+      // 保存会话ID，用于窗口标识
+      sessionId.value = config.session_id || ''
       if (config.theme) {
         currentTheme.value = config.theme
       }
@@ -111,6 +114,7 @@ onMounted(() => {
               v-if="currentPage === 'popup'"
               :request="request"
               :current-theme="currentTheme"
+              :session-id="sessionId"
               @response="handleResponse"
               @cancel="handleCancel"
               @theme-change="handleThemeChange"
