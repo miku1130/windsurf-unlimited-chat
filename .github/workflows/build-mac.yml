@@ -10,6 +10,9 @@ on:
         required: true
         default: 'v1.2.0'
 
+permissions:
+  contents: write
+
 jobs:
   build-macos:
     runs-on: macos-latest
