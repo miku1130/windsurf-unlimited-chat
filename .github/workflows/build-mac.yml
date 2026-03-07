@@ -46,18 +46,18 @@ jobs:
 
       - name: Build macOS executable
         run: |
-          pyinstaller "柠檬酱windsurf无限对话_mac.spec" --noconfirm
+          pyinstaller "柠檬酱f无限对话_mac.spec" --noconfirm
 
       # ── 压缩产物 ──
       - name: Package macOS build
         run: |
           cd dist
           # 如果有 .app 目录就打包它，否则打包可执行文件
-          if [ -d "柠檬酱windsurf无限对话.app" ]; then
-            zip -r "windsurf-unlimited-chat_macOS.zip" "柠檬酱windsurf无限对话.app"
+          if [ -d "柠檬酱无限对话.app" ]; then
+            zip -r "unlimited-chat_macOS.zip" "柠檬酱无限对话.app"
           else
-            chmod +x "柠檬酱windsurf无限对话"
-            zip "windsurf-unlimited-chat_macOS.zip" "柠檬酱windsurf无限对话"
+            chmod +x "柠檬酱无限对话"
+            zip "unlimited-chat_macOS.zip" "柠檬酱无限对话"
           fi
 
       # ── 上传到 Release ──
@@ -66,6 +66,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ github.event.inputs.release_tag }}" \
-            "dist/windsurf-unlimited-chat_macOS.zip" \
+            "dist/unlimited-chat_macOS.zip" \
             --repo "${{ github.repository }}" \
             --clobber

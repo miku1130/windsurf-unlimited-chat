@@ -41,6 +41,14 @@ const configResult = ref('')
 const disabling = ref(false)
 const disableResult = ref('')
 
+// Copilot 配置状态
+const copilotConfiguring = ref(false)
+const copilotConfigResult = ref('')
+// 规则弹窗
+const showRulesModal = ref(false)
+const rulesText = ref('')
+const loadingRules = ref(false)
+
 // 预设音效列表
 const presetSounds = ref<SoundPreset[]>([
   { id: '100w', name: '100万', filename: '100w.mp3' },
@@ -180,6 +188,53 @@ onMounted(() => {
 })
 
 const msg = useMessage()
+
+// 一键注入 Copilot 规则
+async function configureCopilot() {
+  copilotConfiguring.value = true
+  copilotConfigResult.value = ''
+  try {
+    const res = await fetch('/api/configure-copilot', { method: 'POST' })
+    const data = await res.json()
+    if (data.success) {
+      copilotConfigResult.value = 'success'
+    } else {
+      copilotConfigResult.value = data.message || '注入失败'
+    }
+  } catch (e) {
+    copilotConfigResult.value = '网络错误'
+  } finally {
+    copilotConfiguring.value = false
+  }
+}
+
+// 获取 Copilot 规则文本并弹窗展示
+async function showCopilotRules() {
+  loadingRules.value = true
+  try {
+    const res = await fetch('/api/copilot-rules-text', { method: 'POST' })
+    const data = await res.json()
+    if (data.success) {
+      rulesText.value = data.rules_text
+      showRulesModal.value = true
+    } else {
+      msg.error('获取规则文本失败')
+    }
+  } catch (e) {
+    msg.error('网络错误')
+  } finally {
+    loadingRules.value = false
+  }
+}
+
+// 复制规则文本到剪贴板
+function copyRulesText() {
+  navigator.clipboard.writeText(rulesText.value).then(() => {
+    msg.success('规则已复制到剪贴板')
+  }).catch(() => {
+    msg.error('复制失败')
+  })
+}
 
 // 复制文本到剪贴板
 function copyText(text: string) {
@@ -356,6 +411,68 @@ function copyText(text: string) {
         </div>
       </div>
 
+      <!-- VS Code Copilot 配置 -->
+      <div class="settings-section">
+        <div class="section-header">
+          <div class="section-icon copilot">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 00.659 1.591L19 14.5m-4.75-11.396c.251.023.501.05.75.082M19 14.5l-2.47 2.47a3.187 3.187 0 01-2.26.936H9.73a3.187 3.187 0 01-2.26-.936L5 14.5m14 0V17a2 2 0 01-2 2H7a2 2 0 01-2-2v-2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="section-info">
+            <h2>VS Code Copilot 配置</h2>
+            <p>注入规则到用户级聊天指令</p>
+          </div>
+        </div>
+
+        <div class="setting-item column">
+          <p class="windsurf-desc">
+            将提示词规则注入到 VS Code 用户级 prompts 目录，文件以 applyTo: '**' 应用于所有 Copilot 对话，使AI在结束会话前必须调用本工具征求你的反馈。
+          </p>
+          <div class="windsurf-actions">
+            <n-button
+              type="primary"
+              size="small"
+              :loading="copilotConfiguring"
+              @click="configureCopilot"
+            >
+              一键注入 Copilot 规则
+            </n-button>
+            <n-button
+              size="small"
+              :loading="loadingRules"
+              @click="showCopilotRules"
+            >
+              复制规则
+            </n-button>
+          </div>
+          <!-- 注入结果提示 -->
+          <div v-if="copilotConfigResult === 'success'" class="config-result success">
+            注入成功！规则已写入 VS Code 用户级 prompts 目录。
+          </div>
+          <div v-else-if="copilotConfigResult && copilotConfigResult !== 'success'" class="config-result error">
+            {{ copilotConfigResult }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 规则文本弹窗 -->
+      <n-modal v-model:show="showRulesModal" preset="card" title="Copilot 规则文本" style="width: 620px; max-width: 90vw;">
+        <p style="font-size: 12px; opacity: 0.6; margin: 0 0 8px 0;">以下是将注入的完整规则内容，可直接复制使用</p>
+        <n-input
+          type="textarea"
+          :value="rulesText"
+          readonly
+          :autosize="{ minRows: 12, maxRows: 24 }"
+          style="font-family: monospace; font-size: 12px;"
+        />
+        <template #action>
+          <n-button type="primary" size="small" @click="copyRulesText">
+            复制全部
+          </n-button>
+        </template>
+      </n-modal>
+
       <!-- 关于信息 -->
       <div class="settings-section about-section">
         <div class="section-header">
@@ -496,6 +613,15 @@ function copyText(text: string) {
 
 .dark .section-icon.windsurf {
   background: #1a2e3a;
+}
+
+.section-icon.copilot {
+  background: #f0f5ff;
+  color: #597ef7;
+}
+
+.dark .section-icon.copilot {
+  background: #1a2240;
 }
 
 .section-info h2 {

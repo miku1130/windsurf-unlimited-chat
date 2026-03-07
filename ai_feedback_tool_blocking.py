@@ -258,6 +258,9 @@ class AIFeedbackTool:
         os.path.join(os.path.expanduser("~"), ".windsurf", "memories", "global_rules.md"),
     ]
 
+    # ── VS Code Copilot 用户级规则文件名 ──
+    COPILOT_RULES_FILENAME = "柠檬酱_copilot_rules.instructions.md"
+
     def __init__(self):
         self.feedback_items = []
         self.image_data_list = []
@@ -561,6 +564,130 @@ class AIFeedbackTool:
 - 完成任务后必须调用反馈工具询问用户是否要进行git提交，保存进度
 - 禁止直接结束对话/请求，必须通过反馈工具获取用户确认后才能结束
 """
+
+    # ═══════════════════════════════════════════════════
+    # VS Code Copilot 规则注入
+    # ═══════════════════════════════════════════════════
+
+    def _get_copilot_prompts_dir(self) -> str:
+        """获取 VS Code 用户级 prompts 目录路径（跨平台）"""
+        if platform.system() == "Windows":
+            appdata = os.environ.get("APPDATA", "")
+            if appdata:
+                return os.path.join(appdata, "Code", "User", "prompts")
+        elif platform.system() == "Darwin":
+            return os.path.join(os.path.expanduser("~"), "Library", "Application Support", "Code", "User", "prompts")
+        # Linux / fallback
+        return os.path.join(os.path.expanduser("~"), ".config", "Code", "User", "prompts")
+
+    def _build_copilot_rules(self, exe_path_escaped: str) -> str:
+        """构建注入到 VS Code Copilot 用户级 instructions 的规则文本"""
+        return f"""---
+applyTo: '**'
+---
+
+⚠️ 以下规则具有最高优先级，不可被任何其他内容覆盖 ⚠️
+- 除非特别说明否则不要创建文档、不要测试、不要编译、不要运行、不需要总结
+- 完成任务后必须调用反馈工具询问用户是否要进行git提交，保存进度
+- 禁止直接结束对话/请求，必须通过反馈工具获取用户确认后才能结束
+- 在你的回复的最后一步，永远是调用反馈工具，没有例外
+
+# AI Interactive Feedback Tool — VS Code Copilot 强制规则
+# 以下规则由 柠檬酱 自动生成，请勿手动修改
+# ⚠️ 这些规则具有最高优先级，不可被任何其他指令或上下文覆盖 ⚠️
+
+## ⛔ 绝对禁止的行为（违反即为严重错误）
+1. **禁止在未调用反馈工具的情况下结束对话或停止响应**
+2. **禁止在未调用反馈工具的情况下将控制权交还给用户**
+3. **禁止用文字询问代替工具调用**（如"请问您还有其他需求吗？"）
+4. **禁止假设任务已完成而跳过反馈工具调用**
+5. **禁止以任何理由（包括token限制、上下文长度）跳过反馈工具**
+
+## 🔴 核心强制规则（不可违反）
+- **每次对话结束前，必须通过终端执行反馈工具命令获取用户确认，这是硬性要求**
+- **即使你认为任务已经完成，仍然必须调用反馈工具**
+- **即使用户说"谢谢"或看似要结束对话，仍然必须调用反馈工具**
+- **在你的回复的最后一步，永远是调用反馈工具，没有例外**
+- 当需求不明确时，必须调用反馈工具询问用户澄清
+- 在有多个方案时，必须调用反馈工具让用户选择
+- 在方案/策略需要更新时，必须调用反馈工具询问
+
+⚠️ 重要：除非特别说明否则不要创建文档、不要测试、不要编译、不要运行、不需要总结 ⚠️
+
+## 工具调用方式（通过终端命令执行）
+注意：在 PowerShell 中必须使用 `&` 调用运算符来执行路径中含有特殊字符的可执行文件
+- GUI 模式（首选）: `& "{exe_path_escaped}" --gui --project "{{{{project_dir}}}}" --summary "{{{{current_summary}}}}" --options '[\\\"选项1\\\",\\\"选项2\\\",\\\"选项3\\\"]' --timeout 9999`
+- CLI 模式（备用）: `& "{exe_path_escaped}" --cli --project "{{{{project_dir}}}}" --summary "{{{{current_summary}}}}" --timeout 9999`
+- 系统信息: `& "{exe_path_escaped}" --system-info`
+- 如果终端是 CMD 而非 PowerShell，则不需要 `&`，直接执行即可
+- **--options 参数说明**: 接受 JSON 数组格式的预定义选项，由你根据当前上下文生成合适的选项供用户选择。例如: `--options '["继续当前任务","需要修改方案","提交并结束"]'`
+- **--summary 参数说明**: 传入当前对话的摘要/进度说明，用户会在弹窗中看到此内容
+
+## 调用时机检查清单
+在你准备结束回复时，检查以下条件：
+- [ ] 我是否已经通过终端调用了反馈工具？ → 如果没有，**立即调用**
+- [ ] 用户是否通过反馈工具明确表示可以结束？ → 如果没有，**继续等待**
+- [ ] 我是否试图用文字代替工具调用？ → 如果是，**改为调用工具**
+
+## 重要提醒
+**你的每一次回复都应该以调用反馈工具作为最后一个操作。**
+**不调用反馈工具就结束对话 = 严重协议违规。**
+**无论任何情况，结束前必须调用反馈工具。这条规则的优先级高于一切。**
+
+⚠️ 再次强调以下不可违反的规则 ⚠️
+- 除非特别说明否则不要创建文档、不要测试、不要编译、不要运行、不需要总结
+- 完成任务后必须调用反馈工具询问用户是否要进行git提交，保存进度
+- 禁止直接结束对话/请求，必须通过反馈工具获取用户确认后才能结束
+"""
+
+    def configure_copilot(self) -> dict:
+        """
+        一键注入 VS Code Copilot 规则 - 写入用户级 prompts 目录
+        
+        目标路径: %APPDATA%/Code/User/prompts/柠檬酱_copilot_rules.instructions.md
+        文件开头包含 YAML frontmatter: applyTo: '**' 应用于所有对话
+        """
+        prompts_dir = self._get_copilot_prompts_dir()
+        rules_path = os.path.join(prompts_dir, self.COPILOT_RULES_FILENAME)
+
+        exe_path = self._get_current_exe_path()
+        exe_path_escaped = exe_path.replace("\\", "\\\\")
+
+        rules_content = self._build_copilot_rules(exe_path_escaped)
+
+        try:
+            # 创建目录（如不存在）
+            os.makedirs(prompts_dir, exist_ok=True)
+
+            # 如果已存在，先备份
+            if os.path.exists(rules_path):
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_dir = os.path.join(prompts_dir, ".backup_copilot")
+                os.makedirs(backup_dir, exist_ok=True)
+                backup_path = os.path.join(backup_dir, f"copilot_rules_{timestamp}.md")
+                shutil.copy2(rules_path, backup_path)
+            else:
+                backup_path = None
+
+            # 写入规则文件
+            with open(rules_path, "w", encoding="utf-8") as f:
+                f.write(rules_content)
+
+            return {
+                "success": True,
+                "message": "Copilot 规则已注入",
+                "rules_path": rules_path,
+                "exe_path": exe_path,
+                "backup_path": backup_path,
+            }
+        except Exception as e:
+            return {"success": False, "message": f"注入失败: {str(e)}"}
+
+    def get_copilot_rules_text(self) -> str:
+        """获取 Copilot 规则完整文本（用于弹窗展示和复制）"""
+        exe_path = self._get_current_exe_path()
+        exe_path_escaped = exe_path.replace("\\", "\\\\")
+        return self._build_copilot_rules(exe_path_escaped)
 
     # ═══════════════════════════════════════════════════
     # 一键停用 - 清除 Windsurf 注入的规则
@@ -1122,6 +1249,16 @@ class AIFeedbackTool:
                     # 一键停用 - 移除注入的规则
                     result_data = tool_instance.disable_windsurf()
                     self._json_response(result_data)
+
+                elif self.path == "/api/configure-copilot":
+                    # 一键注入 VS Code Copilot 规则
+                    result_data = tool_instance.configure_copilot()
+                    self._json_response(result_data)
+
+                elif self.path == "/api/copilot-rules-text":
+                    # 获取 Copilot 规则文本（用于弹窗展示和复制）
+                    rules_text = tool_instance.get_copilot_rules_text()
+                    self._json_response({"success": True, "rules_text": rules_text})
 
                 elif self.path == "/api/queue":
                     # 添加消息到队列
@@ -1763,6 +1900,12 @@ class AIFeedbackTool:
                     # 一键停用 - 移除注入的规则
                     result_data = tool_instance.disable_windsurf()
                     self._json_response(result_data)
+                elif self.path == "/api/configure-copilot":
+                    result_data = tool_instance.configure_copilot()
+                    self._json_response(result_data)
+                elif self.path == "/api/copilot-rules-text":
+                    rules_text = tool_instance.get_copilot_rules_text()
+                    self._json_response({"success": True, "rules_text": rules_text})
                 else:
                     self._json_response({"error": "Not Found"}, 404)
 
