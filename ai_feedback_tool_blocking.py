@@ -1300,6 +1300,17 @@ applyTo: '**'
                         self.path = "/index.html"
                         super().do_GET()
 
+            def _proxy_announcement(self):
+                """从远程服务器获取公告内容并直接返回json字符串."""
+                try:
+                    import urllib.request, urllib.error
+                    with urllib.request.urlopen('http://127.0.0.1:1111/announcement', timeout=5) as resp:
+                        data = resp.read()
+                        return json.loads(data.decode('utf-8'))
+                except Exception as e:
+                    # 返回空结构，前端会处理
+                    return {"content": "", "enabled": False, "updated_at": ""}
+
             def _read_post_body(self):
                 """安全读取 POST body，支持大体积数据（多图片/长文字）"""
                 try:
@@ -1645,6 +1656,8 @@ applyTo: '**'
                     self._json_response(config)
                 elif self.path == "/api/mode":
                     self._json_response({"mode": "queue_consume"})
+                elif self.path == "/api/announcement":
+                    self._json_response(self._proxy_announcement())
                 elif self.path == "/api/settings":
                     self._json_response(tool_instance.settings)
                 elif self.path == "/api/queue":
@@ -1661,6 +1674,15 @@ applyTo: '**'
                     else:
                         self.path = "/index.html"
                         super().do_GET()
+
+            def _proxy_announcement(self):
+                """代理到远程公告接口"""
+                try:
+                    import urllib.request
+                    with urllib.request.urlopen('http://127.0.0.1:1111/announcement', timeout=5) as resp:
+                        return json.loads(resp.read().decode('utf-8'))
+                except Exception:
+                    return {"content": "", "enabled": False, "updated_at": ""}
 
             def _read_post_body(self):
                 """安全读取 POST body，支持大体积数据"""

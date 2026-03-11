@@ -6,8 +6,8 @@
  */
 import { onMounted, ref } from 'vue'
 
-// 公告远程地址（使用HTTP 277端口，避免HTTPS自签名证书问题）
-const ANNOUNCEMENT_URL = ''
+// 公告地址通过本地 Python 服务器代理，避免跨域
+const ANNOUNCEMENT_URL = '/api/announcement'
 
 interface Props {
   currentTheme?: string
@@ -46,11 +46,14 @@ async function fetchAnnouncement() {
 
 // 切换弹窗显示
 function togglePopup() {
-  if (!hasAnnouncement.value) return
+  // 总是尝试打开弹窗，即使当前没有公告
   showPopup.value = !showPopup.value
-  // 点击后标记已读，移除红点
   if (showPopup.value) {
     dismissed.value = true
+    // 若尚未获取公告，则再尝试一次
+    if (!hasAnnouncement.value) {
+      fetchAnnouncement()
+    }
   }
 }
 
@@ -105,7 +108,12 @@ onMounted(() => {
             </button>
           </div>
           <div class="popup-body">
-            {{ announcement }}
+            <template v-if="announcement && announcement.trim()">
+              {{ announcement }}
+            </template>
+            <template v-else>
+              <em>当前没有公告。</em>
+            </template>
           </div>
         </div>
       </div>
