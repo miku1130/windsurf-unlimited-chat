@@ -874,17 +874,20 @@ applyTo: '**'
     # ═══════════════════════════════════════════════════
 
     @staticmethod
-    def _get_feedback_images_dir() -> str:
-        """获取反馈图片的本地保存目录，不存在则创建"""
-        img_dir = os.path.join(tempfile.gettempdir(), "windsurf_feedback_images")
+    def _get_feedback_images_dir(project_dir: str = "") -> str:
+        """获取反馈图片的保存目录，优先保存到项目目录以便AI访问"""
+        if project_dir and os.path.isdir(project_dir):
+            img_dir = os.path.join(project_dir, ".feedback_images")
+        else:
+            img_dir = os.path.join(tempfile.gettempdir(), "windsurf_feedback_images")
         os.makedirs(img_dir, exist_ok=True)
         return img_dir
 
     @staticmethod
-    def _save_image_to_local(data: str, media_type: str, filename: str) -> Optional[str]:
+    def _save_image_to_local(data: str, media_type: str, filename: str, project_dir: str = "") -> Optional[str]:
         """将 base64 图片数据保存到本地文件，返回绝对路径；失败返回 None"""
         try:
-            img_dir = AIFeedbackTool._get_feedback_images_dir()
+            img_dir = AIFeedbackTool._get_feedback_images_dir(project_dir)
             ext_map = {
                 "image/png": ".png", "image/jpeg": ".jpg",
                 "image/gif": ".gif", "image/bmp": ".bmp", "image/webp": ".webp",
@@ -903,10 +906,11 @@ applyTo: '**'
             return None
 
     @staticmethod
-    def _sanitize_feedback_for_output(feedback: dict) -> dict:
+    def _sanitize_feedback_for_output(feedback: dict, project_dir: str = "") -> dict:
         """清洗反馈数据用于 stdout 输出：
-        - 将 images 中的 base64 data 保存为本地文件，用 file_path 替代
+        - 将 images 中的 base64 data 保存为项目目录下的文件，用 file_path 替代
         - 保留 user_input / selected_options / metadata 完整内容
+        - 图片保存到项目目录 .feedback_images/ 下，AI 可通过文件读取工具访问
         防止巨量 base64 数据撑爆终端导致 Windsurf 丢失 user_input。
         """
         sanitized = {}
@@ -920,6 +924,7 @@ applyTo: '**'
                             img["data"],
                             img.get("media_type", "image/png"),
                             img.get("filename", "image.png"),
+                            project_dir,
                         )
                         clean_img = {
                             "file_path": saved_path or "[save_failed]",
@@ -1540,7 +1545,7 @@ applyTo: '**'
             result["image_count"] = len(feedback.get("images", []))
 
             # 输出清洗版本到 stdout，防止 base64 图片数据导致终端截断丢失 user_input
-            sanitized = self._sanitize_feedback_for_output(feedback)
+            sanitized = self._sanitize_feedback_for_output(feedback, project_dir)
             output = json.dumps(sanitized, ensure_ascii=False, indent=2)
             print(output)
 
@@ -1740,7 +1745,7 @@ applyTo: '**'
                 result["feedback"] = [feedback]
                 result["text_count"] = 1
                 # 输出清洗版本到 stdout，防止 base64 图片数据导致终端截断
-                sanitized = self._sanitize_feedback_for_output(feedback)
+                sanitized = self._sanitize_feedback_for_output(feedback, project_dir)
                 print(json.dumps(sanitized, ensure_ascii=False, indent=2))
             return result
 
@@ -1869,7 +1874,7 @@ applyTo: '**'
             result["image_count"] = len(feedback.get("images", []))
 
             # 输出清洗版本到 stdout，防止 base64 图片数据导致终端截断丢失 user_input
-            sanitized = self._sanitize_feedback_for_output(feedback)
+            sanitized = self._sanitize_feedback_for_output(feedback, project_dir)
             output = json.dumps(sanitized, ensure_ascii=False, indent=2)
             print(output)
 
@@ -2161,7 +2166,7 @@ applyTo: '**'
             result["text_count"] = 1 if feedback.get("user_input") else 0
             result["image_count"] = len(feedback.get("images", []))
             # 输出清洗版本到 stdout，防止 base64 图片数据导致终端截断丢失 user_input
-            sanitized = self._sanitize_feedback_for_output(feedback)
+            sanitized = self._sanitize_feedback_for_output(feedback, project_dir)
             output = json.dumps(sanitized, ensure_ascii=False, indent=2)
             print(output)
             self.save_conversation_record(summary, [feedback], project_dir)
