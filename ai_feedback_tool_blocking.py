@@ -39,6 +39,27 @@ import webbrowser
 from pathlib import Path
 from typing import Optional, List
 
+def create_http_server(address, handler_class):
+    """Create an HTTPServer while working around possible hostname decode issues.
+
+    On some systems the underlying getfqdn call can raise a UnicodeDecodeError
+    when the system hostname contains bytes that can't be decoded as utf-8.
+    This helper retries once while temporarily monkey-patching socket.getfqdn
+    to return a safe fallback value.
+    """
+    try:
+        return http.server.HTTPServer(address, handler_class)
+    except UnicodeDecodeError:
+        orig_getfqdn = socket.getfqdn
+        try:
+            socket.getfqdn = lambda *a, **k: "localhost"
+            return http.server.HTTPServer(address, handler_class)
+        finally:
+            try:
+                socket.getfqdn = orig_getfqdn
+            except Exception:
+                pass
+
 
 class QueueManager:
     """消息队列管理器 - 持久化队列，支持跨弹窗实例消费"""
@@ -849,6 +870,73 @@ applyTo: '**'
             return None
 
     # ═══════════════════════════════════════════════════
+    # 图片本地保存 & 输出清洗 (防止 base64 撑爆 stdout)
+    # ═══════════════════════════════════════════════════
+
+    @staticmethod
+    def _get_feedback_images_dir() -> str:
+        """获取反馈图片的本地保存目录，不存在则创建"""
+        img_dir = os.path.join(tempfile.gettempdir(), "windsurf_feedback_images")
+        os.makedirs(img_dir, exist_ok=True)
+        return img_dir
+
+    @staticmethod
+    def _save_image_to_local(data: str, media_type: str, filename: str) -> Optional[str]:
+        """将 base64 图片数据保存到本地文件，返回绝对路径；失败返回 None"""
+        try:
+            img_dir = AIFeedbackTool._get_feedback_images_dir()
+            ext_map = {
+                "image/png": ".png", "image/jpeg": ".jpg",
+                "image/gif": ".gif", "image/bmp": ".bmp", "image/webp": ".webp",
+            }
+            ext = ext_map.get(media_type, ".png")
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            unique = uuid.uuid4().hex[:8]
+            safe_name = f"{ts}_{unique}{ext}"
+            file_path = os.path.join(img_dir, safe_name)
+            raw = base64.b64decode(data)
+            with open(file_path, "wb") as f:
+                f.write(raw)
+            return file_path
+        except Exception as e:
+            print(f"[警告] 图片保存失败: {e}", file=sys.stderr)
+            return None
+
+    @staticmethod
+    def _sanitize_feedback_for_output(feedback: dict) -> dict:
+        """清洗反馈数据用于 stdout 输出：
+        - 将 images 中的 base64 data 保存为本地文件，用 file_path 替代
+        - 保留 user_input / selected_options / metadata 完整内容
+        防止巨量 base64 数据撑爆终端导致 Windsurf 丢失 user_input。
+        """
+        sanitized = {}
+        for key, value in feedback.items():
+            if key == "images" and isinstance(value, list):
+                clean_images = []
+                for img in value:
+                    if isinstance(img, dict) and "data" in img and len(img.get("data", "")) > 200:
+                        # 保存图片到本地，用文件路径替代 base64 数据
+                        saved_path = AIFeedbackTool._save_image_to_local(
+                            img["data"],
+                            img.get("media_type", "image/png"),
+                            img.get("filename", "image.png"),
+                        )
+                        clean_img = {
+                            "file_path": saved_path or "[save_failed]",
+                            "media_type": img.get("media_type", "image/png"),
+                            "filename": img.get("filename", "image.png"),
+                        }
+                        clean_images.append(clean_img)
+                    elif isinstance(img, dict):
+                        clean_images.append(img)
+                    else:
+                        clean_images.append("[image_data_omitted]")
+                sanitized[key] = clean_images
+            else:
+                sanitized[key] = value
+        return sanitized
+
+    # ═══════════════════════════════════════════════════
     # 交互入口
     # ═══════════════════════════════════════════════════
 
@@ -1207,9 +1295,28 @@ applyTo: '**'
                         self.path = "/index.html"
                         super().do_GET()
 
+            def _read_post_body(self):
+                """安全读取 POST body，支持大体积数据（多图片/长文字）"""
+                try:
+                    content_length = int(self.headers.get("Content-Length", 0))
+                except (ValueError, TypeError):
+                    content_length = 0
+                if content_length <= 0:
+                    return b""
+                # 分块读取，避免一次性读取超大 body 失败
+                chunks = []
+                remaining = content_length
+                while remaining > 0:
+                    chunk_size = min(remaining, 1024 * 1024)  # 每次最多读 1MB
+                    chunk = self.rfile.read(chunk_size)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    remaining -= len(chunk)
+                return b"".join(chunks)
+
             def do_POST(self):
-                content_length = int(self.headers.get("Content-Length", 0))
-                post_body = self.rfile.read(content_length)
+                post_body = self._read_post_body()
 
                 if self.path == "/api/submit":
                     try:
@@ -1217,8 +1324,12 @@ applyTo: '**'
                         response_data[0] = data
                         self._json_response({"status": "ok"})
                         response_event.set()
-                    except json.JSONDecodeError:
-                        self._json_response({"error": "Invalid JSON"}, 400)
+                    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                        print(f"[错误] /api/submit 解析失败: {e}", file=sys.stderr)
+                        self._json_response({"error": f"Invalid JSON: {e}"}, 400)
+                    except Exception as e:
+                        print(f"[错误] /api/submit 未知错误: {e}", file=sys.stderr)
+                        self._json_response({"error": f"Server error: {e}"}, 500)
 
                 elif self.path == "/api/settings":
                     # 保存设置
@@ -1338,7 +1449,7 @@ applyTo: '**'
 
         # ── 启动服务器 (port=0 让操作系统自动分配可用端口，避免多窗口冲突) ──
         try:
-            server = http.server.HTTPServer(("127.0.0.1", 0), FeedbackHandler)
+            server = create_http_server(("127.0.0.1", 0), FeedbackHandler)
             port = server.server_address[1]  # 获取实际分配的端口
         except OSError as e:
             print(f"[错误] 无法启动HTTP服务器: {e}", file=sys.stderr)
@@ -1428,7 +1539,9 @@ applyTo: '**'
             result["text_count"] = 1 if feedback.get("user_input") else 0
             result["image_count"] = len(feedback.get("images", []))
 
-            output = json.dumps(feedback, ensure_ascii=False, indent=2)
+            # 输出清洗版本到 stdout，防止 base64 图片数据导致终端截断丢失 user_input
+            sanitized = self._sanitize_feedback_for_output(feedback)
+            output = json.dumps(sanitized, ensure_ascii=False, indent=2)
             print(output)
 
             self.save_conversation_record(summary, [feedback], project_dir)
@@ -1544,9 +1657,27 @@ applyTo: '**'
                         self.path = "/index.html"
                         super().do_GET()
 
+            def _read_post_body(self):
+                """安全读取 POST body，支持大体积数据"""
+                try:
+                    content_length = int(self.headers.get("Content-Length", 0))
+                except (ValueError, TypeError):
+                    content_length = 0
+                if content_length <= 0:
+                    return b""
+                chunks = []
+                remaining = content_length
+                while remaining > 0:
+                    chunk_size = min(remaining, 1024 * 1024)
+                    chunk = self.rfile.read(chunk_size)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    remaining -= len(chunk)
+                return b"".join(chunks)
+
             def do_POST(self):
-                content_length = int(self.headers.get("Content-Length", 0))
-                post_body = self.rfile.read(content_length)
+                post_body = self._read_post_body()
 
                 if self.path == "/api/submit":
                     try:
@@ -1554,8 +1685,12 @@ applyTo: '**'
                         response_data[0] = data
                         self._json_response({"status": "ok"})
                         response_event.set()
-                    except json.JSONDecodeError:
-                        self._json_response({"error": "Invalid JSON"}, 400)
+                    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                        print(f"[错误] /api/submit 解析失败: {e}", file=sys.stderr)
+                        self._json_response({"error": f"Invalid JSON: {e}"}, 400)
+                    except Exception as e:
+                        print(f"[错误] /api/submit 未知错误: {e}", file=sys.stderr)
+                        self._json_response({"error": f"Server error: {e}"}, 500)
 
                 elif self.path == "/api/queue/cancel":
                     # 用户取消自动发送
@@ -1587,7 +1722,7 @@ applyTo: '**'
 
         # 启动服务器 (port=0 自动分配端口)
         try:
-            server = http.server.HTTPServer(("127.0.0.1", 0), QueueConsumeHandler)
+            server = create_http_server(("127.0.0.1", 0), QueueConsumeHandler)
             port = server.server_address[1]
         except OSError:
             # 回退：直接自动提交，不弹窗
@@ -1604,7 +1739,9 @@ applyTo: '**'
                 }
                 result["feedback"] = [feedback]
                 result["text_count"] = 1
-                print(json.dumps(feedback, ensure_ascii=False, indent=2))
+                # 输出清洗版本到 stdout，防止 base64 图片数据导致终端截断
+                sanitized = self._sanitize_feedback_for_output(feedback)
+                print(json.dumps(sanitized, ensure_ascii=False, indent=2))
             return result
 
         server_thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -1731,7 +1868,9 @@ applyTo: '**'
             result["text_count"] = 1 if feedback.get("user_input") else 0
             result["image_count"] = len(feedback.get("images", []))
 
-            output = json.dumps(feedback, ensure_ascii=False, indent=2)
+            # 输出清洗版本到 stdout，防止 base64 图片数据导致终端截断丢失 user_input
+            sanitized = self._sanitize_feedback_for_output(feedback)
+            output = json.dumps(sanitized, ensure_ascii=False, indent=2)
             print(output)
 
             self.save_conversation_record(summary, [feedback], project_dir)
@@ -1851,9 +1990,27 @@ applyTo: '**'
                         self.path = "/index.html"
                         super().do_GET()
 
+            def _read_post_body(self):
+                """安全读取 POST body，支持大体积数据"""
+                try:
+                    content_length = int(self.headers.get("Content-Length", 0))
+                except (ValueError, TypeError):
+                    content_length = 0
+                if content_length <= 0:
+                    return b""
+                chunks = []
+                remaining = content_length
+                while remaining > 0:
+                    chunk_size = min(remaining, 1024 * 1024)
+                    chunk = self.rfile.read(chunk_size)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    remaining -= len(chunk)
+                return b"".join(chunks)
+
             def do_POST(self):
-                content_length = int(self.headers.get("Content-Length", 0))
-                post_body = self.rfile.read(content_length)
+                post_body = self._read_post_body()
 
                 if self.path == "/api/submit":
                     try:
@@ -1861,8 +2018,12 @@ applyTo: '**'
                         response_data[0] = data
                         self._json_response({"status": "ok"})
                         response_event.set()
-                    except json.JSONDecodeError:
-                        self._json_response({"error": "Invalid JSON"}, 400)
+                    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                        print(f"[错误] /api/submit 解析失败: {e}", file=sys.stderr)
+                        self._json_response({"error": f"Invalid JSON: {e}"}, 400)
+                    except Exception as e:
+                        print(f"[错误] /api/submit 未知错误: {e}", file=sys.stderr)
+                        self._json_response({"error": f"Server error: {e}"}, 500)
                 elif self.path == "/api/settings":
                     try:
                         data = json.loads(post_body.decode("utf-8"))
@@ -1931,7 +2092,7 @@ applyTo: '**'
 
         # 启动服务器 (port=0 自动分配端口，避免多窗口冲突)
         try:
-            server = http.server.HTTPServer(("127.0.0.1", 0), NormalFeedbackHandler)
+            server = create_http_server(("127.0.0.1", 0), NormalFeedbackHandler)
             port = server.server_address[1]
         except OSError:
             return self._cli_feedback_blocking(project_dir, summary, timeout)
@@ -1999,7 +2160,9 @@ applyTo: '**'
             result["feedback"] = [feedback]
             result["text_count"] = 1 if feedback.get("user_input") else 0
             result["image_count"] = len(feedback.get("images", []))
-            output = json.dumps(feedback, ensure_ascii=False, indent=2)
+            # 输出清洗版本到 stdout，防止 base64 图片数据导致终端截断丢失 user_input
+            sanitized = self._sanitize_feedback_for_output(feedback)
+            output = json.dumps(sanitized, ensure_ascii=False, indent=2)
             print(output)
             self.save_conversation_record(summary, [feedback], project_dir)
         else:
@@ -2193,7 +2356,7 @@ def run_queue_manager_service():
     # 启动 HTTP 服务器
     port = QueueManager.QUEUE_MANAGER_PORT
     try:
-        server = http.server.HTTPServer(("127.0.0.1", port), QueueManagerHandler)
+        server = create_http_server(("127.0.0.1", port), QueueManagerHandler)
     except OSError:
         print(f"[队列管理器] 端口 {port} 已被占用，可能已有一个队列管理器在运行", file=sys.stderr)
         # 尝试打开浏览器到已有的服务
