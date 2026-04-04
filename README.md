@@ -1,8 +1,10 @@
-# windsurf无限对话
+# copilot无限对话
 
-**柠檬酱windsurf无限对话工具** — 一款让 Windsurf AI 编程助手能够主动向用户提问、获取反馈的交互工具。
+**柠檬酱copilot无限对话工具** — 一款让 AI 编程助手能够主动向用户提问、获取反馈的交互工具。
 
-通过调用终端堵塞会话机制，在 AI 需要确认或澄清时弹出交互窗口，防止windsurf主动结束对话。达到延长对话的需求。实测最新模型opus 4.6 1m 版本可对话30轮以上  完全烧完每次对话token
+通过调用终端堵塞会话机制，在 AI 需要确认或澄清时弹出交互窗口，防止对话主动结束。达到延长对话的需求。实测最新模型opus 4.6 1m 版本可对话30轮以上  完全烧完每次对话token
+
+> 注意：Windsurf AI 已不再支持此工具，本项目现已迁移至支持 GitHub Copilot 等其他 AI 编程助手
 
 ---
 
@@ -29,7 +31,7 @@
 - **系统信息模式** — 收集环境信息供 AI 参考
 
 ### 自动配置
-- 首次运行自动注入 Windsurf `global_rules.md` 配置
+- 首次运行自动注入 AI 编程助手配置 (Copilot、Windsurf等)
 - 自动配置 MCP 工具调用规则，无需手动设置
 
 ---
@@ -123,7 +125,7 @@ windsurf无限对话/
 ## 工作原理
 
 ```
-Windsurf AI ──(MCP调用)──> ai_feedback_tool_blocking.py
+AI 编程助手 ──(MCP调用)──> ai_feedback_tool_blocking.py
                                     │
                            ┌────────┴────────┐
                            │  检查消息队列    │
@@ -133,10 +135,10 @@ Windsurf AI ──(MCP调用)──> ai_feedback_tool_blocking.py
                                     │
                               用户反馈 JSON
                                     │
-                           Windsurf AI 接收并继续编码
+                           AI 编程助手 接收并继续编码
 ```
 
-1. Windsurf AI 通过 MCP 工具调用本程序
+1. AI 编程助手 (Copilot、Claude、Windsurf等) 通过 MCP 工具调用本程序
 2. 程序检查消息队列，若有预编辑的消息则快闪弹窗倒计时自动发送
 3. 若无队列消息，弹出完整交互窗口等待用户输入
 4. 用户反馈以 JSON 格式返回给 AI，对话继续
@@ -145,7 +147,7 @@ Windsurf AI ──(MCP调用)──> ai_feedback_tool_blocking.py
 
 ## 邀请加入群聊
 
-欢迎加入 **windsurf无限对话** QQ 群，交流使用心得、反馈问题、获取最新更新！
+欢迎加入 **copilot无限对话** QQ 群，交流使用心得、反馈问题、获取最新更新！
 
 **群号: 1076144676**
 
