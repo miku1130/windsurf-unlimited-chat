@@ -154,3 +154,15 @@ AI 编程助手 ──(MCP调用)──> ai_feedback_tool_blocking.py
 <p align="center">
   <img src="docs/qq_group_invite.jpg" alt="QQ群二维码" width="300">
 </p>
+
+---
+
+## 💬 Community
+
+Join our QQ group for discussion and support:
+
+**AI编程开源技术交流群**
+
+[![QQ Group](https://img.shields.io/badge/QQ_Group-Join-12B7F5?style=for-the-badge&logo=tencent-qq&logoColor=white)](https://qm.qq.com/q/kjM22sjGU2)
+
+🔗 Direct link: https://qm.qq.com/q/kjM22sjGU2
